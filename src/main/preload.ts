@@ -1,6 +1,46 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { IpcChannels } from '../shared/constants/ipc';
+import type { 
+  Recording, 
+  Transcription, 
+  TranscriptionProgress,
+  TranscriptionError 
+} from '../shared/types';
 
+// Define the electron API interface
+export interface ElectronAPI {
+  // Settings methods
+  getSettings: () => Promise<Array<{ key: string; value: string }>>;
+  saveSetting: (key: string, value: string) => Promise<{ success: boolean }>;
+  
+  // Audio file methods
+  getAudioFiles: () => Promise<Recording[]>;
+  addAudioFile: (filePath: string) => Promise<string>;
+  
+  // Transcription methods
+  startTranscription: (request: {
+    recordingId: string;
+    filePath: string;
+    language?: string;
+  }) => Promise<{ success: boolean }>;
+  
+  cancelTranscription: (recordingId: string) => Promise<{ success: boolean }>;
+  
+  getTranscriptionStatus: (recordingId: string) => Promise<{
+    status: string;
+    error?: string;
+  }>;
+  
+  getTranscription: (recordingId: string) => Promise<Transcription | null>;
+  
+  getTranscriptionProgress: (recordingId: string) => Promise<TranscriptionProgress>;
+  
+  // Event system
+  on: (channel: string, callback: (...args: any[]) => void) => void;
+  removeListener: (channel: string, callback: (...args: any[]) => void) => void;
+}
+
+// Expose the typed API to the renderer process
 contextBridge.exposeInMainWorld('electron', {
   // Settings methods
   getSettings: () => ipcRenderer.invoke(IpcChannels.GET_SETTINGS),
@@ -13,18 +53,15 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke(IpcChannels.ADD_AUDIO_FILE, filePath),
   
   // Transcription methods
-  startTranscription: (request: {
-    recordingId: string;
-    filePath: string;
-    language?: string;
-  }) => ipcRenderer.invoke(IpcChannels.START_TRANSCRIPTION, request),
-  cancelTranscription: (recordingId: string) => 
+  startTranscription: (request) => 
+    ipcRenderer.invoke(IpcChannels.START_TRANSCRIPTION, request),
+  cancelTranscription: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.CANCEL_TRANSCRIPTION, recordingId),
-  getTranscriptionStatus: (recordingId: string) => 
+  getTranscriptionStatus: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION_STATUS, recordingId),
-  getTranscription: (recordingId: string) => 
+  getTranscription: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION, recordingId),
-  getTranscriptionProgress: (recordingId: string) => 
+  getTranscriptionProgress: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION_PROGRESS, recordingId),
 
   // Event system
@@ -39,56 +76,6 @@ contextBridge.exposeInMainWorld('electron', {
 // Add types for TypeScript
 declare global {
   interface Window {
-    electron: {
-      // Settings methods
-      getSettings: () => Promise<any[]>;
-      saveSetting: (key: string, value: string) => Promise<{ success: boolean }>;
-      
-      // Audio file methods
-      getAudioFiles: () => Promise<Array<{
-        id: string;
-        name: string;
-        path: string;
-        createdAt: number;
-        status: string;
-        filesize: number;
-        duration?: number;
-        metadata?: any;
-      }>>;
-      addAudioFile: (filePath: string) => Promise<string>;
-      
-      // Transcription methods
-      startTranscription: (request: {
-        recordingId: string;
-        filePath: string;
-        language?: string;
-      }) => Promise<{ success: boolean }>;
-      cancelTranscription: (recordingId: string) => Promise<{ success: boolean }>;
-      getTranscriptionStatus: (recordingId: string) => Promise<{
-        status: string;
-        error?: string;
-      }>;
-      getTranscription: (recordingId: string) => Promise<{
-        id: string;
-        recordingId: string;
-        content: string;
-        segments: Array<{
-          start: number;
-          end: number;
-          text: string;
-        }>;
-        language: string;
-        createdAt: number;
-        modifiedAt: number;
-      } | null>;
-      getTranscriptionProgress: (recordingId: string) => Promise<{
-        transcriptionStatus: string;
-        errorMessage?: string;
-      }>;
-      
-      // Event system
-      on: (channel: string, callback: (...args: any[]) => void) => void;
-      removeListener: (channel: string, callback: (...args: any[]) => void) => void;
-    }
+    electron: ElectronAPI;
   }
 }

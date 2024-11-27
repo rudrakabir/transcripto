@@ -6,40 +6,42 @@ import { resolve } from 'path';
 
 // https://vitejs.dev/config/
 export default defineConfig({
-  root: '.',
+  root: '.', // Ensure this is the correct root of your project
   plugins: [
-    react(),
+    react(), // React plugin for Vite
     electron([
       {
+        // Main process entry file
         entry: 'src/main/main.ts',
         vite: {
           build: {
-            outDir: 'dist-electron',
+            outDir: 'dist-electron', // Output for Electron main process files
           },
         },
       },
       {
+        // Preload script entry
         entry: 'src/main/preload.ts',
         onstart(options) {
-          options.reload()
+          options.reload(); // Auto-reload during development
         },
       },
     ]),
-    renderer(),
+    renderer(), // Renderer plugin for Electron
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src'),
+      '@': resolve(__dirname, './src'), // Matches tsconfig.json paths alias
     },
   },
-  base: process.env.ELECTRON_RENDERER_URL ? '/' : './',
+  base: process.env.ELECTRON_RENDERER_URL ? '/' : './', // Dynamic base URL
   css: {
     postcss: {
-      plugins: [require('tailwindcss'), require('autoprefixer')],
+      plugins: [require('tailwindcss'), require('autoprefixer')], // Tailwind and Autoprefixer
     },
   },
   build: {
-    outDir: 'dist',
-    emptyOutDir: true,
+    outDir: 'dist', // Output folder for renderer files
+    emptyOutDir: true, // Clean the folder before building
   },
 });
