@@ -11,5 +11,9 @@ module.exports = {
       },
     },
   },
+  // Add this important line to prevent conflicts with Chakra UI
+  corePlugins: {
+    preflight: false,
+  },
   plugins: [],
 }

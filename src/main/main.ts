@@ -3,6 +3,8 @@ import path from 'path';
 import { initializeDatabase, getDatabase } from './database/init';
 import { setupIpcHandlers } from './ipc/handlers';
 import Store from 'electron-store';
+import events from 'events';
+
 
 const store = new Store();
 
@@ -82,19 +84,16 @@ app.on('window-all-closed', () => {
   }
 });
 
-// Handle macOS activation when no windows are open
-app.on('activate', () => {
-  if (mainWindow === null) {
-    createWindow();
-  }
-});
-
 // Graceful shutdown
 app.on('before-quit', () => {
   try {
     const db = getDatabase();
-    db.close();
+    if (db) {  // Add check to ensure database exists
+      db.close();
+    }
   } catch (error) {
     console.error('Error closing database:', error);
+    // Optionally force quit if database closing fails
+    process.exit(1);
   }
 });

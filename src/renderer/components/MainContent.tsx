@@ -7,17 +7,38 @@ import {
   useTranscription
 } from '../hooks/useTranscription';
 import { FileSelection } from './FileSelection';
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Alert, AlertDescription } from "@/components/ui/alert";
-import { Progress } from "@/components/ui/progress";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { TranscriptionControls } from './TranscriptionComponents';
+import { 
+  Box,
+  Card,
+  CardBody,
+  CardHeader,
+  Heading,
+  Text,
+  Flex,
+  Grid,
+  GridItem,
+  Icon,
+  Alert,
+  AlertIcon,
+  AlertDescription,
+  Progress,
+  Tabs,
+  TabList,
+  TabPanels,
+  Tab,
+  TabPanel,
+  Badge,
+  Textarea,
+  VStack,
+  useColorModeValue
+} from '@chakra-ui/react';
 import { 
   FileText, 
   AlertCircle, 
   CheckCircle2, 
   Timer 
 } from "lucide-react";
-import { TranscriptionControls } from './TranscriptionComponents';
 import type { TranscriptionSegment } from '../../shared/types';
 
 // Helper function for time formatting
@@ -39,62 +60,58 @@ interface TranscriptionOutputProps {
   recordingId: string;
 }
 
-interface Segment {
-  start: number;
-  end: number;
-  text: string;
-}
-
 const MainContent: React.FC = () => {
   const [selectedRecordingId, setSelectedRecordingId] = React.useState<string>('');
   
   return (
-    <div className="flex min-h-screen bg-gray-50">
-      <div className="flex-1 px-6 py-8">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">Audio Transcription</h1>
-          <p className="mt-2 text-gray-600">Transform your audio files into text</p>
-        </div>
+    <Box minH="100vh" bg="gray.50">
+      <Box px={6} py={8}>
+        <VStack align="stretch" spacing={8}>
+          <Box>
+            <Heading size="lg" color="gray.900">Audio Transcription</Heading>
+            <Text mt={2} color="gray.600">Transform your audio files into text</Text>
+          </Box>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* File Management Section */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="w-5 h-5" />
-                File Management
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <FileSelection
-                onFileSelect={setSelectedRecordingId}
-                selectedRecordingId={selectedRecordingId}
-              />
-            </CardContent>
-          </Card>
+          <Grid templateColumns={{ base: '1fr', lg: 'repeat(2, 1fr)' }} gap={6}>
+            {/* File Management Section */}
+            <Card>
+              <CardHeader>
+                <Flex align="center" gap={2}>
+                  <Icon as={FileText} boxSize={5} />
+                  <Heading size="md">File Management</Heading>
+                </Flex>
+              </CardHeader>
+              <CardBody>
+                <FileSelection
+                  onFileSelect={setSelectedRecordingId}
+                  selectedRecordingId={selectedRecordingId}
+                />
+              </CardBody>
+            </Card>
 
-          {/* Transcription Interface */}
-          <div className="space-y-6">
-            {selectedRecordingId ? (
-              <>
-                <TranscriptionPanel recordingId={selectedRecordingId} />
-                <TranscriptionOutput recordingId={selectedRecordingId} />
-              </>
-            ) : (
-              <Card>
-                <CardContent className="pt-6">
-                  <div className="text-center py-12">
-                    <FileText className="mx-auto h-12 w-12 text-gray-400" />
-                    <h3 className="mt-4 text-lg font-medium text-gray-900">No File Selected</h3>
-                    <p className="mt-2 text-gray-500">Select an audio file to begin transcription</p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
+            {/* Transcription Interface */}
+            <VStack spacing={6}>
+              {selectedRecordingId ? (
+                <>
+                  <TranscriptionPanel recordingId={selectedRecordingId} />
+                  <TranscriptionOutput recordingId={selectedRecordingId} />
+                </>
+              ) : (
+                <Card w="full">
+                  <CardBody>
+                    <VStack py={12}>
+                      <Icon as={FileText} boxSize={12} color="gray.400" />
+                      <Heading size="md" color="gray.900">No File Selected</Heading>
+                      <Text color="gray.500">Select an audio file to begin transcription</Text>
+                    </VStack>
+                  </CardBody>
+                </Card>
+              )}
+            </VStack>
+          </Grid>
+        </VStack>
+      </Box>
+    </Box>
   );
 };
 
@@ -103,30 +120,30 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ recordingId }) 
   const { data: progress } = useTranscriptionProgress(recordingId);
   
   return (
-    <Card>
+    <Card w="full">
       <CardHeader>
-        <CardTitle className="flex items-center justify-between">
-          <span>Transcription Status</span>
+        <Flex align="center" justify="space-between">
+          <Heading size="md">Transcription Status</Heading>
           <StatusBadge status={status?.status} />
-        </CardTitle>
+        </Flex>
       </CardHeader>
-      <CardContent>
+      <CardBody>
         <TranscriptionControls recordingId={recordingId} />
         {status?.status === 'processing' && progress && (
-          <div className="mt-4">
-            <Progress value={progress.percent_complete} className="h-2" />
-            <p className="mt-2 text-sm text-gray-600 text-right">
+          <Box mt={4}>
+            <Progress value={progress.percent_complete} size="sm" />
+            <Text mt={2} fontSize="sm" color="gray.600" textAlign="right">
               {progress.percent_complete}% complete
-            </p>
-          </div>
+            </Text>
+          </Box>
         )}
         {status?.status === 'error' && (
-          <Alert variant="destructive" className="mt-4">
-            <AlertCircle className="h-4 w-4" />
+          <Alert status="error" mt={4}>
+            <AlertIcon as={AlertCircle} />
             <AlertDescription>{status.error}</AlertDescription>
           </Alert>
         )}
-      </CardContent>
+      </CardBody>
     </Card>
   );
 };
@@ -135,23 +152,30 @@ const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
   const getStatusConfig = (status?: StatusBadgeProps['status']) => {
     switch (status) {
       case 'completed':
-        return { icon: CheckCircle2, className: 'bg-green-100 text-green-800' };
+        return { icon: CheckCircle2, colorScheme: 'green' };
       case 'processing':
-        return { icon: Timer, className: 'bg-blue-100 text-blue-800' };
+        return { icon: Timer, colorScheme: 'blue' };
       case 'error':
-        return { icon: AlertCircle, className: 'bg-red-100 text-red-800' };
+        return { icon: AlertCircle, colorScheme: 'red' };
       default:
-        return { icon: FileText, className: 'bg-gray-100 text-gray-800' };
+        return { icon: FileText, colorScheme: 'gray' };
     }
   };
 
-  const { icon: Icon, className } = getStatusConfig(status);
+  const { icon: Icon, colorScheme } = getStatusConfig(status);
   
   return (
-    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-sm font-medium ${className}`}>
-      <Icon className="w-4 h-4 mr-1" />
+    <Badge
+      display="flex"
+      alignItems="center"
+      px={2.5}
+      py={0.5}
+      borderRadius="full"
+      colorScheme={colorScheme}
+    >
+      <Icon style={{ width: '1rem', height: '1rem', marginRight: '0.25rem' }} />
       {status || 'Ready'}
-    </span>
+    </Badge>
   );
 };
 
@@ -168,37 +192,56 @@ const TranscriptionOutput: React.FC<TranscriptionOutputProps> = ({ recordingId }
   if (!transcription) return null;
 
   return (
-    <Card>
+    <Card w="full">
       <CardHeader>
-        <CardTitle>Transcription Output</CardTitle>
+        <Heading size="md">Transcription Output</Heading>
       </CardHeader>
-      <CardContent>
-        <Tabs defaultValue="segments">
-          <TabsList>
-            <TabsTrigger value="segments">Time Segments</TabsTrigger>
-            <TabsTrigger value="full">Full Text</TabsTrigger>
-          </TabsList>
-          <TabsContent value="segments" className="mt-4">
-            <div className="space-y-4 max-h-96 overflow-y-auto">
-              {transcription.segments.map((segment: TranscriptionSegment, index: number) => (
-                <div key={segment.id} className="flex gap-4 p-2 hover:bg-gray-50 rounded">
-                  <span className="text-sm font-mono text-gray-500 whitespace-nowrap">
-                    {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
-                  </span>
-                  <p className="text-gray-700">{segment.text}</p>
-                </div>
-              ))}
-            </div>
-          </TabsContent>
-          <TabsContent value="full" className="mt-4">
-            <textarea
-              value={editedText}
-              onChange={(e) => setEditedText(e.target.value)}
-              className="w-full h-96 p-3 border rounded-md"
-            />
-          </TabsContent>
+      <CardBody>
+        <Tabs>
+          <TabList>
+            <Tab>Time Segments</Tab>
+            <Tab>Full Text</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel>
+              <VStack 
+                spacing={4} 
+                maxH="96" 
+                overflowY="auto"
+                align="stretch"
+              >
+                {transcription.segments.map((segment: TranscriptionSegment) => (
+                  <Flex 
+                    key={segment.id} 
+                    gap={4} 
+                    p={2} 
+                    _hover={{ bg: 'gray.50' }} 
+                    borderRadius="md"
+                  >
+                    <Text 
+                      fontFamily="mono" 
+                      fontSize="sm" 
+                      color="gray.500" 
+                      whiteSpace="nowrap"
+                    >
+                      {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
+                    </Text>
+                    <Text color="gray.700">{segment.text}</Text>
+                  </Flex>
+                ))}
+              </VStack>
+            </TabPanel>
+            <TabPanel>
+              <Textarea
+                value={editedText}
+                onChange={(e) => setEditedText(e.target.value)}
+                h="96"
+                p={3}
+              />
+            </TabPanel>
+          </TabPanels>
         </Tabs>
-      </CardContent>
+      </CardBody>
     </Card>
   );
 };

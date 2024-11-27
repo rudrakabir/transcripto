@@ -1,6 +1,17 @@
 // src/renderer/components/FileSelection.tsx
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { 
+  Box, 
+  Button, 
+  Text, 
+  VStack, 
+  Divider, 
+  Flex, 
+  Badge,
+  Input,
+  useColorModeValue
+} from '@chakra-ui/react';
 import type { Recording } from '../../shared/types';
 
 interface FileSelectionProps {
@@ -62,75 +73,96 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
     fileInputRef.current?.click();
   };
 
+  const getBadgeProps = (status: string) => {
+    switch(status) {
+      case 'completed':
+        return { colorScheme: 'green' };
+      case 'error':
+        return { colorScheme: 'red' };
+      case 'processing':
+        return { colorScheme: 'blue' };
+      default:
+        return { colorScheme: 'gray' };
+    }
+  };
+
   return (
-    <div className="space-y-4">
-      <div
-        className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
-          isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
-        }`}
+    <VStack spacing={4}>
+      <Box
+        w="full"
+        borderWidth={2}
+        borderStyle="dashed"
+        borderRadius="lg"
+        p={8}
+        textAlign="center"
+        transition="all 0.2s"
+        bg={isDragging ? 'blue.50' : 'transparent'}
+        borderColor={isDragging ? 'blue.500' : 'gray.300'}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
       >
-        <div className="space-y-2">
-          <p className="text-gray-600">Drag and drop audio files here</p>
-          <p className="text-gray-400">or</p>
-          <button
+        <VStack spacing={2}>
+          <Text color="gray.600">Drag and drop audio files here</Text>
+          <Text color="gray.400">or</Text>
+          <Button
             onClick={handleBrowseClick}
-            className="px-4 py-2 bg-blue-500 text-white rounded hover:bg-blue-600"
+            colorScheme="blue"
           >
             Browse Files
-          </button>
-          <input
+          </Button>
+          <Input
             ref={fileInputRef}
             type="file"
             accept="audio/*,.wav"
-            className="hidden"
+            display="none"
             multiple
             onChange={handleFileInputChange}
           />
-        </div>
-      </div>
+        </VStack>
+      </Box>
 
-      <div className="border rounded-lg overflow-hidden">
-        <div className="bg-gray-50 px-4 py-2 border-b">
-          <h3 className="font-medium">Audio Files</h3>
-        </div>
+      <Box w="full" borderWidth={1} borderRadius="lg" overflow="hidden">
+        <Box bg="gray.50" px={4} py={2} borderBottomWidth={1}>
+          <Text fontWeight="medium">Audio Files</Text>
+        </Box>
         {isLoading ? (
-          <div className="p-4 text-center text-gray-500">Loading files...</div>
+          <Box p={4} textAlign="center" color="gray.500">Loading files...</Box>
         ) : files.length === 0 ? (
-          <div className="p-4 text-center text-gray-500">No audio files yet</div>
+          <Box p={4} textAlign="center" color="gray.500">No audio files yet</Box>
         ) : (
-          <div className="divide-y">
+          <VStack divider={<Divider />} spacing={0}>
             {files.map((file) => (
-              <button
+              <Button
                 key={file.id}
                 onClick={() => onFileSelect(file.id)}
-                className={`w-full px-4 py-3 text-left hover:bg-gray-50 flex items-center justify-between ${
-                  selectedRecordingId === file.id ? 'bg-blue-50' : ''
-                }`}
+                w="full"
+                px={4}
+                py={3}
+                h="auto"
+                justifyContent="flex-start"
+                bg={selectedRecordingId === file.id ? 'blue.50' : 'white'}
+                _hover={{ bg: selectedRecordingId === file.id ? 'blue.100' : 'gray.50' }}
+                variant="ghost"
               >
-                <div>
-                  <p className="font-medium">{file.filename}</p>
-                  <p className="text-sm text-gray-500">
-                    Added {new Date(file.created_at).toLocaleDateString()}
-                  </p>
-                </div>
-                {file.status && (
-                  <span className={`text-sm px-2 py-1 rounded ${
-                    file.status === 'completed' ? 'bg-green-100 text-green-800' :
-                    file.status === 'error' ? 'bg-red-100 text-red-800' :
-                    file.status === 'processing' ? 'bg-blue-100 text-blue-800' :
-                    'bg-gray-100 text-gray-800'
-                  }`}>
-                    {file.status}
-                  </span>
-                )}
-              </button>
+                <Flex w="full" justify="space-between" align="center">
+                  <Box>
+                    <Text fontWeight="medium">{file.filename}</Text>
+                    <Text fontSize="sm" color="gray.500">
+                      Added {new Date(file.created_at).toLocaleDateString()}
+                    </Text>
+                  </Box>
+                  {file.status && (
+                    <Badge {...getBadgeProps(file.status)}>
+                      {file.status}
+                    </Badge>
+                  )}
+                </Flex>
+              </Button>
             ))}
-          </div>
+          </VStack>
         )}
-      </div>
-    </div>
+      </Box>
+    </VStack>
   );
 };
