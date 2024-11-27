@@ -1,7 +1,12 @@
 // src/main/transcription/worker.ts
-import { Worker, WorkerOptions } from 'worker_threads';
+import { Worker } from 'worker_threads';
 import path from 'path';
 import { FileSystemEvents, EVENT_TYPES } from '../file-system/events';
+import { 
+  TranscriptionProgress, 
+  TranscriptionSegment, 
+  Transcription 
+} from '../../shared/types';
 
 export interface TranscriptionRequest {
   recordingId: string;
@@ -9,13 +14,9 @@ export interface TranscriptionRequest {
   language?: string;
 }
 
-export interface TranscriptionResult {
-  text: string;
-  segments: Array<{
-    start: number;
-    end: number;
-    text: string;
-  }>;
+interface WorkerMessage {
+  type: 'progress' | 'result';
+  data: TranscriptionProgress | Transcription;
 }
 
 export class TranscriptionWorker {
@@ -26,7 +27,7 @@ export class TranscriptionWorker {
     this.events = FileSystemEvents.getInstance();
   }
 
-  async transcribe(request: TranscriptionRequest): Promise<TranscriptionResult> {
+  async transcribe(request: TranscriptionRequest): Promise<Transcription> {
     return new Promise((resolve, reject) => {
       const workerScript = path.join(__dirname, 'whisper-worker.js');
       
@@ -38,19 +39,25 @@ export class TranscriptionWorker {
         }
       });
 
-      this.worker.on('message', (result) => {
-        if (result.type === 'progress') {
+      this.worker.on('message', (message: WorkerMessage) => {
+        if (message.type === 'progress') {
+          const progress = message.data as TranscriptionProgress;
           this.events.emit(EVENT_TYPES.TRANSCRIPTION_PROGRESS, {
-            recordingId: request.recordingId,
-            progress: result.progress
+            recording_id: request.recordingId,
+            percent_complete: progress.percent_complete,
+            current_segment: progress.current_segment,
+            estimated_time_remaining: progress.estimated_time_remaining
           });
-        } else if (result.type === 'result') {
-          resolve(result.data);
+        } else if (message.type === 'result') {
+          resolve(message.data as Transcription);
         }
       });
 
-      this.worker.on('error', reject);
-      this.worker.on('exit', (code) => {
+      this.worker.on('error', (error: Error) => {
+        reject(error);
+      });
+
+      this.worker.on('exit', (code: number) => {
         if (code !== 0) {
           reject(new Error(`Worker stopped with exit code ${code}`));
         }

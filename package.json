@@ -10,13 +10,21 @@
     "postinstall": "electron-rebuild -f -w better-sqlite3"
   },
   "dependencies": {
+    "@chakra-ui/react": "^3.2.1",
+    "@emotion/react": "^11.13.5",
+    "@emotion/styled": "^11.13.5",
+    "@radix-ui/react-progress": "^1.1.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tabs": "^1.1.1",
     "@tanstack/react-query": "^5.0.0",
     "@types/uuid": "^10.0.0",
     "better-sqlite3": "^9.6.0",
     "electron-store": "^8.1.0",
+    "framer-motion": "^11.11.17",
     "lucide-react": "^0.461.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "shadcn-ui": "^0.9.3",
     "type-fest": "^4.28.1",
     "uuid": "^11.0.3",
     "zod": "^3.23.8"

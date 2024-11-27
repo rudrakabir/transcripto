@@ -3,13 +3,16 @@ const electron = require("electron");
 var IpcChannels = /* @__PURE__ */ ((IpcChannels2) => {
   IpcChannels2["GET_SETTINGS"] = "settings:get";
   IpcChannels2["SAVE_SETTING"] = "settings:save";
-  IpcChannels2["START_TRANSCRIPTION"] = "transcription:start";
-  IpcChannels2["CANCEL_TRANSCRIPTION"] = "transcription:cancel";
-  IpcChannels2["GET_TRANSCRIPTION_STATUS"] = "transcription:status";
-  IpcChannels2["GET_TRANSCRIPTION"] = "transcription:get";
-  IpcChannels2["GET_TRANSCRIPTION_PROGRESS"] = "transcription:progress";
   IpcChannels2["GET_AUDIO_FILES"] = "audio:get-files";
   IpcChannels2["ADD_AUDIO_FILE"] = "audio:add-file";
+  IpcChannels2["START_TRANSCRIPTION"] = "transcription:start";
+  IpcChannels2["CANCEL_TRANSCRIPTION"] = "transcription:cancel";
+  IpcChannels2["GET_TRANSCRIPTION_STATUS"] = "transcription:get-status";
+  IpcChannels2["GET_TRANSCRIPTION"] = "transcription:get";
+  IpcChannels2["GET_TRANSCRIPTION_PROGRESS"] = "transcription:get-progress";
+  IpcChannels2["TRANSCRIPTION_PROGRESS"] = "transcription:progress";
+  IpcChannels2["TRANSCRIPTION_COMPLETED"] = "transcription:completed";
+  IpcChannels2["TRANSCRIPTION_ERROR"] = "transcription:error";
   return IpcChannels2;
 })(IpcChannels || {});
 electron.contextBridge.exposeInMainWorld("electron", {

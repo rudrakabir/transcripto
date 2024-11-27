@@ -121,21 +121,23 @@ export class TranscriptionQueueManager {
         status: 'completed'
       });
 
-    } catch (error) {
-      // Handle error
+    } catch (error: unknown) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
+      
       db.prepare(`
         UPDATE recordings 
         SET transcription_status = ?, error_message = ? 
         WHERE id = ?
-      `).run('error', error.message, item.recordingId);
-
+      `).run('error', errorMessage, item.recordingId);
+    
       this.events.emit(EVENT_TYPES.RECORDING_CHANGED, {
         type: 'transcription_status',
         recordingId: item.recordingId,
         status: 'error',
-        error: error.message
+        error: errorMessage
       });
-    } finally {
+    }
+     finally {
       // Cleanup
       if (this.currentWorker) {
         this.currentWorker.terminate();

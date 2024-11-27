@@ -1,3 +1,4 @@
+// src/renderer/components/TranscriptionComponents.tsx
 import React from 'react';
 import { 
   useStartTranscription,
@@ -7,8 +8,13 @@ import {
   useTranscription,
   useTranscriptionEvents
 } from '../hooks/useTranscription';
+import { RecordingStatus, type TranscriptionSegment } from '../../shared/types';
 
-export const TranscriptionControls: React.FC<{ recordingId: string }> = ({ recordingId }) => {
+interface TranscriptionControlsProps {
+  recordingId: string;
+}
+
+export const TranscriptionControls: React.FC<TranscriptionControlsProps> = ({ recordingId }) => {
   const [language, setLanguage] = React.useState('en');
   const startTranscription = useStartTranscription();
   const cancelTranscription = useCancelTranscription();
@@ -18,7 +24,7 @@ export const TranscriptionControls: React.FC<{ recordingId: string }> = ({ recor
     await startTranscription.mutateAsync({
       recordingId,
       language,
-      filePath: `recordings/${recordingId}.wav` // Assuming this is your path structure
+      filePath: `recordings/${recordingId}.wav`
     });
   };
 
@@ -32,14 +38,14 @@ export const TranscriptionControls: React.FC<{ recordingId: string }> = ({ recor
         value={language}
         onChange={(e) => setLanguage(e.target.value)}
         className="px-3 py-2 border rounded-md"
-        disabled={status?.status === 'processing'}
+        disabled={status?.status === RecordingStatus.PROCESSING}
       >
         <option value="en">English</option>
         <option value="es">Spanish</option>
         <option value="fr">French</option>
       </select>
 
-      {(!status || status.status === 'error') && (
+      {(!status || status.status === RecordingStatus.ERROR) && (
         <button
           onClick={handleStart}
           className="px-4 py-2 bg-blue-500 text-white rounded-md hover:bg-blue-600"
@@ -48,7 +54,7 @@ export const TranscriptionControls: React.FC<{ recordingId: string }> = ({ recor
         </button>
       )}
 
-      {(status?.status === 'queued' || status?.status === 'processing') && (
+      {(status?.status === RecordingStatus.PENDING || status?.status === RecordingStatus.PROCESSING) && (
         <button
           onClick={handleCancel}
           className="px-4 py-2 bg-red-500 text-white rounded-md hover:bg-red-600"
@@ -60,44 +66,53 @@ export const TranscriptionControls: React.FC<{ recordingId: string }> = ({ recor
   );
 };
 
-export const TranscriptionProgress: React.FC<{ recordingId: string }> = ({ recordingId }) => {
+interface TranscriptionProgressProps {
+  recordingId: string;
+}
+
+export const TranscriptionProgress: React.FC<TranscriptionProgressProps> = ({ recordingId }) => {
   const { data: progress } = useTranscriptionProgress(recordingId);
+  const { data: status } = useTranscriptionStatus(recordingId);
   useTranscriptionEvents(recordingId);
 
-  if (!progress) return null;
+  if (!progress || !status) return null;
 
   return (
     <div className="p-4 border-b">
       <div className="mb-2">
-        Status: <span className="font-medium">{progress.status}</span>
+        Status: <span className="font-medium">{status.status}</span>
       </div>
       
-      {progress.status === 'processing' && (
+      {status.status === RecordingStatus.PROCESSING && (
         <div className="w-full bg-gray-200 rounded-full h-2.5">
           <div
             className="bg-blue-600 h-2.5 rounded-full transition-all"
-            style={{ width: `${progress.progress}%` }}
+            style={{ width: `${progress.percent_complete}%` }}
           />
         </div>
       )}
 
-      {progress.status === 'error' && (
+      {status.status === RecordingStatus.ERROR && (
         <div className="text-red-500">
-          Error: {progress.error}
+          Error: {status.error}
         </div>
       )}
     </div>
   );
 };
 
-export const TranscriptionView: React.FC<{ recordingId: string }> = ({ recordingId }) => {
+interface TranscriptionViewProps {
+  recordingId: string;
+}
+
+export const TranscriptionView: React.FC<TranscriptionViewProps> = ({ recordingId }) => {
   const { data: transcription } = useTranscription(recordingId);
   const [isEditing, setIsEditing] = React.useState(false);
   const [editedText, setEditedText] = React.useState('');
 
   React.useEffect(() => {
     if (transcription) {
-      setEditedText(transcription.text);
+      setEditedText(transcription.content);
     }
   }, [transcription]);
 
@@ -123,10 +138,10 @@ export const TranscriptionView: React.FC<{ recordingId: string }> = ({ recording
         />
       ) : (
         <div className="space-y-4">
-          {transcription.segments.map((segment, index) => (
-            <div key={index} className="flex gap-4">
+          {transcription.segments.map((segment: TranscriptionSegment) => (
+            <div key={segment.id} className="flex gap-4">
               <span className="text-gray-500 w-20">
-                {formatTime(segment.start)} - {formatTime(segment.end)}
+                {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
               </span>
               <p>{segment.text}</p>
             </div>

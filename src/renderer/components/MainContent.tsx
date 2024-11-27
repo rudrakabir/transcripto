@@ -1,3 +1,4 @@
+// src/renderer/components/MainContent.tsx
 import React from 'react';
 import { useSettings } from '../hooks/useSettings';
 import { 
@@ -10,7 +11,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Button } from "@/components/ui/button";
 import { 
   FileText, 
   AlertCircle, 
@@ -18,7 +18,7 @@ import {
   Timer 
 } from "lucide-react";
 import { TranscriptionControls } from './TranscriptionComponents';
-
+import type { TranscriptionSegment } from '../../shared/types';
 
 // Helper function for time formatting
 const formatTime = (seconds: number): string => {
@@ -32,16 +32,21 @@ interface TranscriptionPanelProps {
 }
 
 interface StatusBadgeProps {
-  status?: string;
+  status?: 'pending' | 'processing' | 'completed' | 'error';
 }
 
 interface TranscriptionOutputProps {
   recordingId: string;
 }
 
-const MainContent = () => {
-  const { data: settings } = useSettings();
-  const [selectedRecordingId, setSelectedRecordingId] = React.useState('');
+interface Segment {
+  start: number;
+  end: number;
+  text: string;
+}
+
+const MainContent: React.FC = () => {
+  const [selectedRecordingId, setSelectedRecordingId] = React.useState<string>('');
   
   return (
     <div className="flex min-h-screen bg-gray-50">
@@ -53,7 +58,7 @@ const MainContent = () => {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           {/* File Management Section */}
-          <Card className="h-fit">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="w-5 h-5" />
@@ -107,16 +112,18 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ recordingId }) 
       </CardHeader>
       <CardContent>
         <TranscriptionControls recordingId={recordingId} />
-        {progress?.status === 'processing' && (
+        {status?.status === 'processing' && progress && (
           <div className="mt-4">
-            <Progress value={progress.progress} className="h-2" />
-            <p className="mt-2 text-sm text-gray-600 text-right">{progress.progress}% complete</p>
+            <Progress value={progress.percent_complete} className="h-2" />
+            <p className="mt-2 text-sm text-gray-600 text-right">
+              {progress.percent_complete}% complete
+            </p>
           </div>
         )}
-        {progress?.status === 'error' && (
+        {status?.status === 'error' && (
           <Alert variant="destructive" className="mt-4">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{progress.error}</AlertDescription>
+            <AlertDescription>{status.error}</AlertDescription>
           </Alert>
         )}
       </CardContent>
@@ -125,7 +132,7 @@ const TranscriptionPanel: React.FC<TranscriptionPanelProps> = ({ recordingId }) 
 };
 
 const StatusBadge: React.FC<StatusBadgeProps> = ({ status }) => {
-  const getStatusConfig = (status?: string) => {
+  const getStatusConfig = (status?: StatusBadgeProps['status']) => {
     switch (status) {
       case 'completed':
         return { icon: CheckCircle2, className: 'bg-green-100 text-green-800' };
@@ -154,7 +161,7 @@ const TranscriptionOutput: React.FC<TranscriptionOutputProps> = ({ recordingId }
   
   React.useEffect(() => {
     if (transcription) {
-      setEditedText(transcription.text);
+      setEditedText(transcription.content);
     }
   }, [transcription]);
 
@@ -173,10 +180,10 @@ const TranscriptionOutput: React.FC<TranscriptionOutputProps> = ({ recordingId }
           </TabsList>
           <TabsContent value="segments" className="mt-4">
             <div className="space-y-4 max-h-96 overflow-y-auto">
-              {transcription.segments.map((segment, index) => (
-                <div key={index} className="flex gap-4 p-2 hover:bg-gray-50 rounded">
+              {transcription.segments.map((segment: TranscriptionSegment, index: number) => (
+                <div key={segment.id} className="flex gap-4 p-2 hover:bg-gray-50 rounded">
                   <span className="text-sm font-mono text-gray-500 whitespace-nowrap">
-                    {formatTime(segment.start)} - {formatTime(segment.end)}
+                    {formatTime(segment.start_time)} - {formatTime(segment.end_time)}
                   </span>
                   <p className="text-gray-700">{segment.text}</p>
                 </div>

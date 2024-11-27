@@ -1,41 +1,34 @@
+// src/renderer/components/FileSelection.tsx
 import React from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import type { Recording } from '../../shared/types';
 
-interface FileInfo {
-  id: string;
-  name: string;
-  path: string;
-  createdAt: string;
-  status?: 'ready' | 'transcribing' | 'completed' | 'error';
-}
-
-export const FileSelection: React.FC<{
+interface FileSelectionProps {
   onFileSelect: (recordingId: string) => void;
   selectedRecordingId?: string;
-}> = ({ onFileSelect, selectedRecordingId }) => {
+}
+
+export const FileSelection: React.FC<FileSelectionProps> = ({ 
+  onFileSelect, 
+  selectedRecordingId 
+}) => {
   const [isDragging, setIsDragging] = React.useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
-  // Query to get list of files
-  const { data: files = [], isLoading } = useQuery<FileInfo[]>({
+  const { data: files = [], isLoading } = useQuery<Recording[]>({
     queryKey: ['audioFiles'],
-    queryFn: async () => {
-      return await window.electron.invoke('GET_AUDIO_FILES');
-    }
+    queryFn: () => window.electron.getAudioFiles()
   });
 
-  // Mutation for adding new files
   const addFile = useMutation({
-    mutationFn: async (filePath: string) => {
-      return await window.electron.invoke('ADD_AUDIO_FILE', filePath);
-    },
+    mutationFn: (filePath: string) => window.electron.addAudioFile(filePath),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
     }
   });
 
-  const handleDragOver = (e: React.DragEvent) => {
+  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(true);
   };
@@ -44,7 +37,7 @@ export const FileSelection: React.FC<{
     setIsDragging(false);
   };
 
-  const handleDrop = async (e: React.DragEvent) => {
+  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
     setIsDragging(false);
 
@@ -71,7 +64,6 @@ export const FileSelection: React.FC<{
 
   return (
     <div className="space-y-4">
-      {/* File Drop Zone */}
       <div
         className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
           isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300'
@@ -100,7 +92,6 @@ export const FileSelection: React.FC<{
         </div>
       </div>
 
-      {/* File List */}
       <div className="border rounded-lg overflow-hidden">
         <div className="bg-gray-50 px-4 py-2 border-b">
           <h3 className="font-medium">Audio Files</h3>
@@ -120,16 +111,16 @@ export const FileSelection: React.FC<{
                 }`}
               >
                 <div>
-                  <p className="font-medium">{file.name}</p>
+                  <p className="font-medium">{file.filename}</p>
                   <p className="text-sm text-gray-500">
-                    Added {new Date(file.createdAt).toLocaleDateString()}
+                    Added {new Date(file.created_at).toLocaleDateString()}
                   </p>
                 </div>
                 {file.status && (
                   <span className={`text-sm px-2 py-1 rounded ${
                     file.status === 'completed' ? 'bg-green-100 text-green-800' :
                     file.status === 'error' ? 'bg-red-100 text-red-800' :
-                    file.status === 'transcribing' ? 'bg-blue-100 text-blue-800' :
+                    file.status === 'processing' ? 'bg-blue-100 text-blue-800' :
                     'bg-gray-100 text-gray-800'
                   }`}>
                     {file.status}
