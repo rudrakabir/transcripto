@@ -1,168 +1,314 @@
-// src/renderer/components/FileSelection.tsx
-import React from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { 
-  Box, 
-  Button, 
-  Text, 
-  VStack, 
-  Divider, 
-  Flex, 
-  Badge,
+import React, { useState, useCallback } from 'react';
+import {
+  Box,
+  Button,
   Input,
-  useColorModeValue
+  Table,
+  Thead,
+  Tbody,
+  Tr,
+  Th,
+  Td,
+  Select,
+  Stack,
+  Text,
+  Badge,
+  IconButton,
+  useToast,
+  HStack,
+  VStack,
+  Flex,
+  InputGroup,
+  InputLeftElement
 } from '@chakra-ui/react';
-import type { Recording } from '../../shared/types';
+import {
+  Folder,
+  File,
+  Search,
+  SortAsc,
+  SortDesc
+} from 'lucide-react';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+
+// Types
+interface AudioFile {
+  id: string;
+  path: string;
+  name: string;
+  size: number;
+  duration?: number;
+  modifiedAt: Date;
+  status: 'unprocessed' | 'queued' | 'processing' | 'completed' | 'error';
+}
 
 interface FileSelectionProps {
   onFileSelect: (recordingId: string) => void;
-  selectedRecordingId?: string;
+  selectedRecordingId: string;
 }
 
-export const FileSelection: React.FC<FileSelectionProps> = ({ 
-  onFileSelect, 
-  selectedRecordingId 
+interface SortConfig {
+  key: keyof AudioFile;
+  direction: 'asc' | 'desc';
+}
+
+interface FilterState {
+  search: string;
+  status: AudioFile['status'] | 'all';
+  dateFrom: string;
+  dateTo: string;
+}
+
+// Utility functions
+const formatDuration = (seconds?: number): string => {
+  if (!seconds) return '--:--';
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.floor(seconds % 60);
+  return `${mins}:${secs.toString().padStart(2, '0')}`;
+};
+
+const formatFileSize = (bytes: number): string => {
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let size = bytes;
+  let unitIndex = 0;
+  while (size >= 1024 && unitIndex < units.length - 1) {
+    size /= 1024;
+    unitIndex++;
+  }
+  return `${size.toFixed(1)} ${units[unitIndex]}`;
+};
+
+// Main component
+export const FileSelection: React.FC<FileSelectionProps> = ({
+  onFileSelect,
+  selectedRecordingId
 }) => {
-  const [isDragging, setIsDragging] = React.useState(false);
-  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const toast = useToast();
   const queryClient = useQueryClient();
+  
+  // State
+  const [sort, setSort] = useState<SortConfig>({ key: 'name', direction: 'asc' });
+  const [filters, setFilters] = useState<FilterState>({
+    search: '',
+    status: 'all',
+    dateFrom: '',
+    dateTo: ''
+  });
 
-  const { data: files = [], isLoading } = useQuery<Recording[]>({
+  // Queries
+  const {
+    data: files = [],
+    isLoading,
+    error
+  } = useQuery<AudioFile[]>({
     queryKey: ['audioFiles'],
-    queryFn: () => window.electron.getAudioFiles()
+    queryFn: async () => {
+      try {
+        const response = await window.electron.invoke('getAudioFiles');
+        return response;
+      } catch (err) {
+        throw new Error('Failed to fetch audio files');
+      }
+    }
   });
 
-  const addFile = useMutation({
-    mutationFn: (filePath: string) => window.electron.addAudioFile(filePath),
-    onSuccess: () => {
+  // Handlers
+  const handleDirectorySelect = useCallback(async () => {
+    try {
+      await window.electron.invoke('selectDirectory');
       queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
+    } catch (err) {
+      toast({
+        title: 'Error selecting directory',
+        status: 'error',
+        duration: 3000
+      });
     }
-  });
+  }, [queryClient, toast]);
 
-  const handleDragOver = (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(true);
+  const handleFileSelect = useCallback(async () => {
+    try {
+      await window.electron.invoke('selectFile');
+      queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
+    } catch (err) {
+      toast({
+        title: 'Error selecting file',
+        status: 'error',
+        duration: 3000
+      });
+    }
+  }, [queryClient, toast]);
+
+  const handleSort = useCallback((key: keyof AudioFile) => {
+    setSort(prev => ({
+      key,
+      direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
+    }));
+  }, []);
+
+  // Filter and sort logic
+  const filteredAndSortedFiles = React.useMemo(() => {
+    return files
+      .filter(file => {
+        const matchesSearch = file.name.toLowerCase().includes(filters.search.toLowerCase());
+        const matchesStatus = filters.status === 'all' || file.status === filters.status;
+        const matchesDateRange = (!filters.dateFrom || new Date(file.modifiedAt) >= new Date(filters.dateFrom)) &&
+          (!filters.dateTo || new Date(file.modifiedAt) <= new Date(filters.dateTo));
+        return matchesSearch && matchesStatus && matchesDateRange;
+      })
+      .sort((a, b) => {
+        const aValue = a[sort.key];
+        const bValue = b[sort.key];
+        const direction = sort.direction === 'asc' ? 1 : -1;
+        return aValue < bValue ? -direction : direction;
+      });
+  }, [files, filters, sort]);
+
+  // Render helpers
+  const renderSortIcon = (key: keyof AudioFile) => {
+    if (sort.key !== key) return null;
+    return sort.direction === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />;
   };
 
-  const handleDragLeave = () => {
-    setIsDragging(false);
+  const renderStatusBadge = (status: AudioFile['status']) => {
+    const statusConfig = {
+      unprocessed: { color: 'gray', label: 'Unprocessed' },
+      queued: { color: 'blue', label: 'Queued' },
+      processing: { color: 'yellow', label: 'Processing' },
+      completed: { color: 'green', label: 'Completed' },
+      error: { color: 'red', label: 'Error' }
+    };
+    const config = statusConfig[status];
+    return <Badge colorScheme={config.color}>{config.label}</Badge>;
   };
 
-  const handleDrop = async (e: React.DragEvent<HTMLDivElement>) => {
-    e.preventDefault();
-    setIsDragging(false);
-
-    const files = Array.from(e.dataTransfer.files);
-    const audioFiles = files.filter(file => 
-      file.type.startsWith('audio/') || file.name.endsWith('.wav')
+  if (error) {
+    return (
+      <Box p={4} textAlign="center">
+        <Text color="red.500">Error loading files. Please try again.</Text>
+      </Box>
     );
-
-    for (const file of audioFiles) {
-      await addFile.mutateAsync(file.path);
-    }
-  };
-
-  const handleFileInputChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = Array.from(e.target.files || []);
-    for (const file of files) {
-      await addFile.mutateAsync(file.path);
-    }
-  };
-
-  const handleBrowseClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const getBadgeProps = (status: string) => {
-    switch(status) {
-      case 'completed':
-        return { colorScheme: 'green' };
-      case 'error':
-        return { colorScheme: 'red' };
-      case 'processing':
-        return { colorScheme: 'blue' };
-      default:
-        return { colorScheme: 'gray' };
-    }
-  };
+  }
 
   return (
-    <VStack spacing={4}>
-      <Box
-        w="full"
-        borderWidth={2}
-        borderStyle="dashed"
-        borderRadius="lg"
-        p={8}
-        textAlign="center"
-        transition="all 0.2s"
-        bg={isDragging ? 'blue.50' : 'transparent'}
-        borderColor={isDragging ? 'blue.500' : 'gray.300'}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDrop={handleDrop}
-      >
-        <VStack spacing={2}>
-          <Text color="gray.600">Drag and drop audio files here</Text>
-          <Text color="gray.400">or</Text>
+    <Box p={4}>
+      <VStack spacing={4} align="stretch">
+        {/* Action buttons */}
+        <HStack spacing={4}>
           <Button
-            onClick={handleBrowseClick}
+            leftIcon={<Folder size={16} />}
+            onClick={handleDirectorySelect}
             colorScheme="blue"
           >
-            Browse Files
+            Select Directory
           </Button>
-          <Input
-            ref={fileInputRef}
-            type="file"
-            accept="audio/*,.wav"
-            display="none"
-            multiple
-            onChange={handleFileInputChange}
-          />
-        </VStack>
-      </Box>
+          <Button
+            leftIcon={<File size={16} />}
+            onClick={handleFileSelect}
+            variant="outline"
+          >
+            Select File
+          </Button>
+        </HStack>
 
-      <Box w="full" borderWidth={1} borderRadius="lg" overflow="hidden">
-        <Box bg="gray.50" px={4} py={2} borderBottomWidth={1}>
-          <Text fontWeight="medium">Audio Files</Text>
-        </Box>
+        {/* Filters */}
+        <Stack direction={['column', 'row']} spacing={4}>
+          <InputGroup>
+            <InputLeftElement>
+              <Search size={16} />
+            </InputLeftElement>
+            <Input
+              placeholder="Search files..."
+              value={filters.search}
+              onChange={e => setFilters(prev => ({ ...prev, search: e.target.value }))}
+            />
+          </InputGroup>
+          <Select
+            value={filters.status}
+            onChange={e => setFilters(prev => ({ ...prev, status: e.target.value as AudioFile['status'] | 'all' }))}
+          >
+            <option value="all">All Status</option>
+            <option value="unprocessed">Unprocessed</option>
+            <option value="queued">Queued</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="error">Error</option>
+          </Select>
+          <Input
+            type="date"
+            value={filters.dateFrom}
+            onChange={e => setFilters(prev => ({ ...prev, dateFrom: e.target.value }))}
+          />
+          <Input
+            type="date"
+            value={filters.dateTo}
+            onChange={e => setFilters(prev => ({ ...prev, dateTo: e.target.value }))}
+          />
+        </Stack>
+
+        {/* File list */}
         {isLoading ? (
-          <Box p={4} textAlign="center" color="gray.500">Loading files...</Box>
-        ) : files.length === 0 ? (
-          <Box p={4} textAlign="center" color="gray.500">No audio files yet</Box>
+          <Box p={4} textAlign="center">
+            <Text>Loading files...</Text>
+          </Box>
+        ) : filteredAndSortedFiles.length === 0 ? (
+          <Box p={8} textAlign="center" bg="gray.50" borderRadius="md">
+            <Text color="gray.500">No audio files found. Select a directory or file to begin.</Text>
+          </Box>
         ) : (
-          <VStack divider={<Divider />} spacing={0}>
-            {files.map((file) => (
-              <Button
-                key={file.id}
-                onClick={() => onFileSelect(file.id)}
-                w="full"
-                px={4}
-                py={3}
-                h="auto"
-                justifyContent="flex-start"
-                bg={selectedRecordingId === file.id ? 'blue.50' : 'white'}
-                _hover={{ bg: selectedRecordingId === file.id ? 'blue.100' : 'gray.50' }}
-                variant="ghost"
-              >
-                <Flex w="full" justify="space-between" align="center">
-                  <Box>
-                    <Text fontWeight="medium">{file.filename}</Text>
-                    <Text fontSize="sm" color="gray.500">
-                      Added {new Date(file.created_at).toLocaleDateString()}
-                    </Text>
-                  </Box>
-                  {file.status && (
-                    <Badge {...getBadgeProps(file.status)}>
-                      {file.status}
-                    </Badge>
-                  )}
-                </Flex>
-              </Button>
-            ))}
-          </VStack>
+          <Box overflowX="auto">
+            <Table variant="simple">
+              <Thead>
+                <Tr>
+                  <Th onClick={() => handleSort('name')} cursor="pointer">
+                    <HStack spacing={2}>
+                      <Text>Name</Text>
+                      {renderSortIcon('name')}
+                    </HStack>
+                  </Th>
+                  <Th onClick={() => handleSort('duration')} cursor="pointer">
+                    <HStack spacing={2}>
+                      <Text>Duration</Text>
+                      {renderSortIcon('duration')}
+                    </HStack>
+                  </Th>
+                  <Th onClick={() => handleSort('size')} cursor="pointer">
+                    <HStack spacing={2}>
+                      <Text>Size</Text>
+                      {renderSortIcon('size')}
+                    </HStack>
+                  </Th>
+                  <Th onClick={() => handleSort('modifiedAt')} cursor="pointer">
+                    <HStack spacing={2}>
+                      <Text>Modified</Text>
+                      {renderSortIcon('modifiedAt')}
+                    </HStack>
+                  </Th>
+                  <Th>Status</Th>
+                </Tr>
+              </Thead>
+              <Tbody>
+                {filteredAndSortedFiles.map(file => (
+                  <Tr
+                    key={file.id}
+                    onClick={() => onFileSelect(file.id)}
+                    bg={selectedRecordingId === file.id ? 'blue.50' : undefined}
+                    _hover={{ bg: 'gray.50' }}
+                    cursor="pointer"
+                  >
+                    <Td>{file.name}</Td>
+                    <Td>{formatDuration(file.duration)}</Td>
+                    <Td>{formatFileSize(file.size)}</Td>
+                    <Td>{new Date(file.modifiedAt).toLocaleDateString()}</Td>
+                    <Td>{renderStatusBadge(file.status)}</Td>
+                  </Tr>
+                ))}
+              </Tbody>
+            </Table>
+          </Box>
         )}
-      </Box>
-    </VStack>
+      </VStack>
+    </Box>
   );
 };
+
+export default FileSelection;
