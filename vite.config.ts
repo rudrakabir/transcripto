@@ -4,25 +4,42 @@ import renderer from 'vite-plugin-electron-renderer';
 import react from '@vitejs/plugin-react';
 import { resolve } from 'path';
 
+// https://vitejs.dev/config/
 export default defineConfig({
-  root: '.',  // Add this line
+  root: '.',
   plugins: [
     react(),
     electron([
       {
         entry: 'src/main/main.ts',
-      }
+        vite: {
+          build: {
+            outDir: 'dist-electron',
+          },
+        },
+      },
+      {
+        entry: 'src/main/preload.ts',
+        onstart(options) {
+          options.reload()
+        },
+      },
     ]),
-    renderer()
+    renderer(),
   ],
   resolve: {
     alias: {
-      '@': resolve(__dirname, './src')
-    }
+      '@': resolve(__dirname, './src'),
+    },
   },
-  base: './',  // Add this line
+  base: process.env.ELECTRON_RENDERER_URL ? '/' : './',
+  css: {
+    postcss: {
+      plugins: [require('tailwindcss'), require('autoprefixer')],
+    },
+  },
   build: {
     outDir: 'dist',
-    emptyOutDir: true
-  }
+    emptyOutDir: true,
+  },
 });

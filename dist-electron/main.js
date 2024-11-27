@@ -14871,18 +14871,41 @@ const createWindow = () => {
   mainWindow = new require$$1.BrowserWindow({
     width: 1200,
     height: 800,
+    minWidth: 800,
+    minHeight: 600,
+    titleBarStyle: "hiddenInset",
+    // Makes it look more native on macOS
+    backgroundColor: "#ffffff",
     webPreferences: {
       nodeIntegration: true,
       contextIsolation: true,
-      preload: require$$0.join(__dirname, "preload.js")
+      preload: require$$0.join(__dirname, "preload.js"),
+      sandbox: false
+      // Required for better-sqlite3
     }
   });
+  try {
+    const db2 = getDatabase();
+    const stmt = db2.prepare("INSERT OR REPLACE INTO settings (key, value) VALUES (?, ?)");
+    stmt.run("testSetting", "Hello from the database!");
+    stmt.run("appVersion", require$$1.app.getVersion());
+  } catch (error2) {
+    console.error("Failed to set test settings:", error2);
+  }
   if (process.env.NODE_ENV === "development") {
     mainWindow.loadURL("http://localhost:5173");
     mainWindow.webContents.openDevTools();
   } else {
     mainWindow.loadFile(require$$0.join(__dirname, "../index.html"));
   }
+  mainWindow.webContents.on("crashed", () => {
+    console.error("Window crashed! Attempting to reload...");
+    mainWindow == null ? void 0 : mainWindow.reload();
+  });
+  mainWindow.on("unresponsive", () => {
+    console.error("Window unresponsive! Attempting to reload...");
+    mainWindow == null ? void 0 : mainWindow.reload();
+  });
   mainWindow.on("closed", () => {
     mainWindow = null;
   });
@@ -14892,6 +14915,11 @@ require$$1.app.whenReady().then(async () => {
     await initializeDatabase();
     setupIpcHandlers(require$$1.ipcMain);
     createWindow();
+    require$$1.app.on("activate", () => {
+      if (mainWindow === null) {
+        createWindow();
+      }
+    });
   } catch (error2) {
     console.error("Failed to initialize application:", error2);
     require$$1.app.quit();
@@ -14905,5 +14933,13 @@ require$$1.app.on("window-all-closed", () => {
 require$$1.app.on("activate", () => {
   if (mainWindow === null) {
     createWindow();
+  }
+});
+require$$1.app.on("before-quit", () => {
+  try {
+    const db2 = getDatabase();
+    db2.close();
+  } catch (error2) {
+    console.error("Error closing database:", error2);
   }
 });
