@@ -1,13 +1,14 @@
+// src/main/preload.ts
 import { contextBridge, ipcRenderer } from 'electron';
 import { IpcChannels } from '../shared/constants/ipc';
 import type { 
   Recording, 
   Transcription, 
   TranscriptionProgress,
-  TranscriptionError 
+  TranscriptionError,
+  RecordingStatus
 } from '../shared/types';
 
-// Define the electron API interface
 export interface ElectronAPI {
   // Settings methods
   getSettings: () => Promise<Array<{ key: string; value: string }>>;
@@ -15,7 +16,13 @@ export interface ElectronAPI {
   
   // Audio file methods
   getAudioFiles: () => Promise<Recording[]>;
-  addAudioFile: (filePath: string) => Promise<string>;
+  getRecording: (id: string) => Promise<Recording | null>;
+  addAudioFile: (recording: Recording) => Promise<string>;
+  updateRecordingStatus: (
+    id: string, 
+    status: RecordingStatus, 
+    error?: string
+  ) => Promise<{ success: boolean }>;
   
   // Transcription methods
   startTranscription: (request: {
@@ -26,12 +33,14 @@ export interface ElectronAPI {
   
   cancelTranscription: (recordingId: string) => Promise<{ success: boolean }>;
   
+  getTranscription: (recordingId: string) => Promise<Transcription | null>;
+  
+  saveTranscription: (transcription: Transcription) => Promise<{ success: boolean }>;
+  
   getTranscriptionStatus: (recordingId: string) => Promise<{
     status: string;
     error?: string;
   }>;
-  
-  getTranscription: (recordingId: string) => Promise<Transcription | null>;
   
   getTranscriptionProgress: (recordingId: string) => Promise<TranscriptionProgress>;
   
@@ -40,7 +49,6 @@ export interface ElectronAPI {
   removeListener: (channel: string, callback: (...args: any[]) => void) => void;
 }
 
-// Expose the typed API to the renderer process
 contextBridge.exposeInMainWorld('electron', {
   // Settings methods
   getSettings: () => ipcRenderer.invoke(IpcChannels.GET_SETTINGS),
@@ -49,18 +57,23 @@ contextBridge.exposeInMainWorld('electron', {
     
   // Audio file methods
   getAudioFiles: () => ipcRenderer.invoke(IpcChannels.GET_AUDIO_FILES),
-  addAudioFile: (filePath: string) => 
-    ipcRenderer.invoke(IpcChannels.ADD_AUDIO_FILE, filePath),
+  getRecording: (id: string) => ipcRenderer.invoke(IpcChannels.GET_RECORDING, id),
+  addAudioFile: (recording: Recording) => 
+    ipcRenderer.invoke(IpcChannels.ADD_AUDIO_FILE, recording),
+  updateRecordingStatus: (id: string, status: RecordingStatus, error?: string) =>
+    ipcRenderer.invoke(IpcChannels.UPDATE_RECORDING_STATUS, id, status, error),
   
   // Transcription methods
   startTranscription: (request) => 
     ipcRenderer.invoke(IpcChannels.START_TRANSCRIPTION, request),
   cancelTranscription: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.CANCEL_TRANSCRIPTION, recordingId),
-  getTranscriptionStatus: (recordingId) => 
-    ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION_STATUS, recordingId),
   getTranscription: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION, recordingId),
+  saveTranscription: (transcription) =>
+    ipcRenderer.invoke(IpcChannels.SAVE_TRANSCRIPTION, transcription),
+  getTranscriptionStatus: (recordingId) => 
+    ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION_STATUS, recordingId),
   getTranscriptionProgress: (recordingId) => 
     ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION_PROGRESS, recordingId),
 
