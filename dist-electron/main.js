@@ -1,4 +1,5 @@
 "use strict";
 require("electron");
 require("path");
-require("./main-CI7fKFrl.js");
+require("./main-DsrPBMOV.js");
+require("crypto");

@@ -5,6 +5,11 @@ import { IpcChannels } from '../../shared/constants/ipc';
 import type { Recording, Transcription, RecordingStatus } from '../../shared/types';
 
 export function setupIpcHandlers(ipcMain: IpcMain) {
+  // Ensure handlers are cleanly registered
+  Object.values(IpcChannels).forEach(channel => {
+    ipcMain.removeHandler(channel);
+  });
+
   // Recording handlers
   ipcMain.handle(IpcChannels.GET_AUDIO_FILES, async () => {
     const db = getDatabase();
@@ -22,11 +27,14 @@ export function setupIpcHandlers(ipcMain: IpcMain) {
     return db.getRecording(id);
   });
 
-  ipcMain.handle(IpcChannels.UPDATE_RECORDING_STATUS, async (_, id: string, status: RecordingStatus, error?: string) => {
-    const db = getDatabase();
-    db.updateRecordingStatus(id, status, error);
-    return { success: true };
-  });
+  ipcMain.handle(
+    IpcChannels.UPDATE_RECORDING_STATUS,
+    async (_, id: string, status: RecordingStatus, error?: string) => {
+      const db = getDatabase();
+      db.updateRecordingStatus(id, status, error);
+      return { success: true };
+    }
+  );
 
   // Transcription handlers
   ipcMain.handle(IpcChannels.GET_TRANSCRIPTION, async (_, recordingId: string) => {
@@ -45,7 +53,7 @@ export function setupIpcHandlers(ipcMain: IpcMain) {
     console.error('IPC handler error:', error);
     return {
       success: false,
-      error: error instanceof Error ? error.message : 'Unknown error'
+      error: error instanceof Error ? error.message : 'Unknown error',
     };
   }
 

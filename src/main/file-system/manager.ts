@@ -13,6 +13,7 @@ export class FileSystemManagerImpl implements FileSystemManager {
   private validExtensions = new Set(['.mp3', '.wav', '.m4a', '.ogg', '.flac']);
 
   constructor(dbPath: string) {
+    console.log('FileSystemManager initialized with path:', dbPath);
     this.events = FileSystemEvents.getInstance();
     this.db = DatabaseManager.getInstance(dbPath);
   }

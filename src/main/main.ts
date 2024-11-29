@@ -5,8 +5,11 @@ import { setupIpcHandlers } from './ipc/handlers';
 import Store from 'electron-store';
 import events from 'events';
 import { Recording, RecordingStatus } from '../shared/types';
+import { webcrypto } from 'crypto';
+import { FileSystemManager, FileSystemManagerImpl } from './file-system';
 
 const store = new Store();
+const crypto = (globalThis as any).crypto || webcrypto;
 
 let mainWindow: BrowserWindow | null = null;
 
@@ -24,6 +27,7 @@ const testDatabase = async () => {
       created_at: Date.now(),
       modified_at: Date.now(),
       status: RecordingStatus.PENDING,
+      error_message: '',
       metadata: {
         format: 'mp3',
         bitrate: 128000,
@@ -53,6 +57,21 @@ const testDatabase = async () => {
     return false;
   }
 };
+
+const testFileSystem = () => {
+  return new Promise((resolve) => {
+    const dbPath = path.join(app.getPath('userData'), 'database.sqlite');
+    const fsManager = new FileSystemManagerImpl(dbPath);
+    
+    fsManager.onRecordingAdded((file) => console.log('Recording added:', file));
+    fsManager.onRecordingChanged((file) => console.log('Recording changed:', file));
+    fsManager.onRecordingRemoved((path) => console.log('Recording removed:', path));
+
+    const testDir = path.join(app.getPath('documents'), 'TranscriptoTest');
+    fsManager.watchDirectory(testDir).then(() => resolve(fsManager));
+  });
+};
+
 
 const createWindow = async () => {
   mainWindow = new BrowserWindow({
@@ -118,6 +137,14 @@ app.whenReady().then(async () => {
     console.log('Running database test...');
     const testResult = await testDatabase();
     console.log('Database test completed:', testResult ? 'SUCCESS' : 'FAILED');
+
+    // Run filesystem test
+    try {
+      await testFileSystem();
+      console.log('File system test initialized');
+    } catch (error) {
+      console.error('File system test failed:', error);
+    }
 
     app.on('activate', async () => {
       if (mainWindow === null) {
