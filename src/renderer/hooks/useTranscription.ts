@@ -30,6 +30,7 @@ export const useTranscription = (recordingId: string) => {
     },
     staleTime: Infinity,
     enabled: Boolean(recordingId),
+    retry: false,
   });
 };
 
@@ -37,12 +38,18 @@ export const useTranscriptionStatus = (recordingId: string) => {
   return useQuery({
     queryKey: QUERY_KEYS.status(recordingId),
     queryFn: async () => {
-      return await window.electron.getTranscriptionStatus(recordingId);
+      const result = await window.electron.getTranscriptionStatus(recordingId);
+      if (!result) throw new Error('Failed to get transcription status');
+      return result;
     },
-    refetchInterval: (data) => 
-      data?.status === RecordingStatus.PENDING || 
-      data?.status === RecordingStatus.PROCESSING ? 2000 : false,
+    refetchInterval: (data) => {
+      if (!data) return false;
+      return [RecordingStatus.PENDING, RecordingStatus.PROCESSING].includes(data.status as RecordingStatus) 
+        ? 2000 
+        : false;
+    },
     enabled: Boolean(recordingId),
+    retry: 2,
   });
 };
 
@@ -50,7 +57,9 @@ export const useTranscriptionProgress = (recordingId: string) => {
   return useQuery({
     queryKey: QUERY_KEYS.progress(recordingId),
     queryFn: async (): Promise<TranscriptionProgress> => {
-      return await window.electron.getTranscriptionProgress(recordingId);
+      const result = await window.electron.getTranscriptionProgress(recordingId);
+      if (!result) throw new Error('Failed to get transcription progress');
+      return result;
     },
     refetchInterval: (data, query) => {
       const status = query.queryClient.getQueryData<{ status: RecordingStatus }>(
@@ -59,6 +68,7 @@ export const useTranscriptionProgress = (recordingId: string) => {
       return status?.status === RecordingStatus.PROCESSING ? 1000 : false;
     },
     enabled: Boolean(recordingId),
+    retry: false,
   });
 };
 
@@ -67,10 +77,13 @@ export const useStartTranscription = () => {
 
   return useMutation({
     mutationFn: async (request: TranscriptionRequest) => {
-      return await window.electron.startTranscription(request);
+      const result = await window.electron.startTranscription(request);
+      if (!result.success) {
+        throw new Error('Failed to start transcription');
+      }
+      return result;
     },
     onSuccess: (_, variables) => {
-      // Invalidate relevant queries to trigger refetch
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.status(variables.recordingId)
       });
@@ -78,6 +91,9 @@ export const useStartTranscription = () => {
         queryKey: QUERY_KEYS.progress(variables.recordingId)
       });
     },
+    onError: (error: Error) => {
+      console.error('Transcription start failed:', error);
+    }
   });
 };
 
@@ -86,10 +102,13 @@ export const useCancelTranscription = () => {
 
   return useMutation({
     mutationFn: async (recordingId: string) => {
-      return await window.electron.cancelTranscription(recordingId);
+      const result = await window.electron.cancelTranscription(recordingId);
+      if (!result.success) {
+        throw new Error('Failed to cancel transcription');
+      }
+      return result;
     },
     onSuccess: (_, recordingId) => {
-      // Invalidate relevant queries
       queryClient.invalidateQueries({
         queryKey: QUERY_KEYS.status(recordingId)
       });
@@ -106,7 +125,7 @@ export const useTranscriptionEvents = (recordingId: string) => {
   React.useEffect(() => {
     if (!recordingId) return;
 
-    const handleProgress = (_: unknown, progress: TranscriptionProgress) => {
+    const handleProgress = (progress: TranscriptionProgress) => {
       if (progress.recording_id !== recordingId) return;
       
       queryClient.setQueryData(

@@ -13,11 +13,9 @@ import {
   Stack,
   Text,
   Badge,
-  IconButton,
   useToast,
   HStack,
   VStack,
-  Flex,
   InputGroup,
   InputLeftElement
 } from '@chakra-ui/react';
@@ -28,32 +26,24 @@ import {
   SortAsc,
   SortDesc
 } from 'lucide-react';
-import { useQuery, useQueryClient } from '@tanstack/react-query';
-
-// Types
-interface AudioFile {
-  id: string;
-  path: string;
-  name: string;
-  size: number;
-  duration?: number;
-  modifiedAt: Date;
-  status: 'unprocessed' | 'queued' | 'processing' | 'completed' | 'error';
-}
+import { useQuery, useQueryClient, UseQueryResult } from '@tanstack/react-query';
+import { RecordingStatus, type Recording } from '../../shared/types';
 
 interface FileSelectionProps {
   onFileSelect: (recordingId: string) => void;
   selectedRecordingId: string;
 }
 
+type SortableFields = 'fileName' | 'duration' | 'size' | 'modifiedAt' | 'createdAt';
+
 interface SortConfig {
-  key: keyof AudioFile;
+  key: SortableFields;
   direction: 'asc' | 'desc';
 }
 
 interface FilterState {
   search: string;
-  status: AudioFile['status'] | 'all';
+  status: RecordingStatus | 'all';
   dateFrom: string;
   dateTo: string;
 }
@@ -86,7 +76,7 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
   const queryClient = useQueryClient();
   
   // State
-  const [sort, setSort] = useState<SortConfig>({ key: 'name', direction: 'asc' });
+  const [sort, setSort] = useState<SortConfig>({ key: 'fileName', direction: 'asc' });
   const [filters, setFilters] = useState<FilterState>({
     search: '',
     status: 'all',
@@ -99,26 +89,23 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
     data: files = [],
     isLoading,
     error
-  } = useQuery<AudioFile[]>({
+  }: UseQueryResult<Recording[], Error> = useQuery({
     queryKey: ['audioFiles'],
     queryFn: async () => {
-      try {
-        const response = await window.electron.invoke('getAudioFiles');
-        return response;
-      } catch (err) {
-        throw new Error('Failed to fetch audio files');
-      }
+      const response = await window.electron.getAudioFiles();
+      return response;
     }
   });
 
   // Handlers
   const handleDirectorySelect = useCallback(async () => {
     try {
-      await window.electron.invoke('selectDirectory');
-      queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
+      await window.electron.selectDirectory();
+      await queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
     } catch (err) {
       toast({
         title: 'Error selecting directory',
+        description: err instanceof Error ? err.message : 'Failed to select directory',
         status: 'error',
         duration: 3000
       });
@@ -127,56 +114,101 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
 
   const handleFileSelect = useCallback(async () => {
     try {
-      await window.electron.invoke('selectFile');
-      queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
+      await window.electron.selectFile();
+      await queryClient.invalidateQueries({ queryKey: ['audioFiles'] });
     } catch (err) {
       toast({
         title: 'Error selecting file',
+        description: err instanceof Error ? err.message : 'Failed to select file',
         status: 'error',
         duration: 3000
       });
     }
   }, [queryClient, toast]);
 
-  const handleSort = useCallback((key: keyof AudioFile) => {
+  const handleSort = useCallback((key: SortableFields) => {
     setSort(prev => ({
       key,
       direction: prev.key === key && prev.direction === 'asc' ? 'desc' : 'asc'
     }));
   }, []);
 
-  // Filter and sort logic
+  // Sort and filter logic
+  const sortRecordings = (a: Recording, b: Recording, key: SortableFields, direction: 'asc' | 'desc'): number => {
+    const aValue = a[key];
+    const bValue = b[key];
+    
+    // Handle undefined values
+    if (aValue === undefined && bValue === undefined) return 0;
+    if (aValue === undefined) return direction === 'asc' ? 1 : -1;
+    if (bValue === undefined) return direction === 'asc' ? -1 : 1;
+    
+    // Handle dates
+    if (key === 'modifiedAt' || key === 'createdAt') {
+      const aTime = aValue instanceof Date ? aValue.getTime() : new Date(aValue).getTime();
+      const bTime = bValue instanceof Date ? bValue.getTime() : new Date(bValue).getTime();
+      return direction === 'asc' ? aTime - bTime : bTime - aTime;
+    }
+    
+    // Handle numbers and strings
+    const comparison = typeof aValue === 'string' && typeof bValue === 'string'
+      ? aValue.localeCompare(bValue)
+      : Number(aValue) - Number(bValue);
+      
+    return direction === 'asc' ? comparison : -comparison;
+  };
+
+  // Filtered and sorted files
   const filteredAndSortedFiles = React.useMemo(() => {
+    if (!Array.isArray(files)) return [];
+    
     return files
       .filter(file => {
-        const matchesSearch = file.name.toLowerCase().includes(filters.search.toLowerCase());
-        const matchesStatus = filters.status === 'all' || file.status === filters.status;
-        const matchesDateRange = (!filters.dateFrom || new Date(file.modifiedAt) >= new Date(filters.dateFrom)) &&
-          (!filters.dateTo || new Date(file.modifiedAt) <= new Date(filters.dateTo));
+        const matchesSearch = file.fileName.toLowerCase().includes(filters.search.toLowerCase());
+        const matchesStatus = filters.status === 'all' || file.transcriptionStatus === filters.status;
+        
+        // Safe date comparison
+        let matchesDateRange = true;
+        if (filters.dateFrom || filters.dateTo) {
+          const fileDate = file.modifiedAt instanceof Date 
+            ? file.modifiedAt 
+            : new Date(file.modifiedAt);
+            
+          if (filters.dateFrom) {
+            const fromDate = new Date(filters.dateFrom);
+            if (!isNaN(fromDate.getTime())) {
+              matchesDateRange = matchesDateRange && fileDate >= fromDate;
+            }
+          }
+          
+          if (filters.dateTo) {
+            const toDate = new Date(filters.dateTo);
+            if (!isNaN(toDate.getTime())) {
+              matchesDateRange = matchesDateRange && fileDate <= toDate;
+            }
+          }
+        }
+          
         return matchesSearch && matchesStatus && matchesDateRange;
       })
-      .sort((a, b) => {
-        const aValue = a[sort.key];
-        const bValue = b[sort.key];
-        const direction = sort.direction === 'asc' ? 1 : -1;
-        return aValue < bValue ? -direction : direction;
-      });
+      .sort((a, b) => sortRecordings(a, b, sort.key, sort.direction));
   }, [files, filters, sort]);
 
   // Render helpers
-  const renderSortIcon = (key: keyof AudioFile) => {
+  const renderSortIcon = (key: SortableFields) => {
     if (sort.key !== key) return null;
     return sort.direction === 'asc' ? <SortAsc size={16} /> : <SortDesc size={16} />;
   };
 
-  const renderStatusBadge = (status: AudioFile['status']) => {
-    const statusConfig = {
-      unprocessed: { color: 'gray', label: 'Unprocessed' },
-      queued: { color: 'blue', label: 'Queued' },
-      processing: { color: 'yellow', label: 'Processing' },
-      completed: { color: 'green', label: 'Completed' },
-      error: { color: 'red', label: 'Error' }
+  const renderStatusBadge = (status: RecordingStatus) => {
+    const statusConfig: Record<RecordingStatus, { color: string; label: string }> = {
+      [RecordingStatus.UNPROCESSED]: { color: 'gray', label: 'Unprocessed' },
+      [RecordingStatus.PENDING]: { color: 'blue', label: 'Queued' },
+      [RecordingStatus.PROCESSING]: { color: 'yellow', label: 'Processing' },
+      [RecordingStatus.COMPLETED]: { color: 'green', label: 'Completed' },
+      [RecordingStatus.ERROR]: { color: 'red', label: 'Error' }
     };
+    
     const config = statusConfig[status];
     return <Badge colorScheme={config.color}>{config.label}</Badge>;
   };
@@ -184,7 +216,9 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
   if (error) {
     return (
       <Box p={4} textAlign="center">
-        <Text color="red.500">Error loading files. Please try again.</Text>
+        <Text color="red.500">
+          {error instanceof Error ? error.message : 'Error loading files. Please try again.'}
+        </Text>
       </Box>
     );
   }
@@ -224,14 +258,14 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
           </InputGroup>
           <Select
             value={filters.status}
-            onChange={e => setFilters(prev => ({ ...prev, status: e.target.value as AudioFile['status'] | 'all' }))}
+            onChange={e => setFilters(prev => ({ ...prev, status: e.target.value as RecordingStatus | 'all' }))}
           >
             <option value="all">All Status</option>
-            <option value="unprocessed">Unprocessed</option>
-            <option value="queued">Queued</option>
-            <option value="processing">Processing</option>
-            <option value="completed">Completed</option>
-            <option value="error">Error</option>
+            {Object.values(RecordingStatus).map(status => (
+              <option key={status} value={status}>
+                {status.charAt(0).toUpperCase() + status.slice(1)}
+              </option>
+            ))}
           </Select>
           <Input
             type="date"
@@ -259,10 +293,10 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
             <Table variant="simple">
               <Thead>
                 <Tr>
-                  <Th onClick={() => handleSort('name')} cursor="pointer">
+                  <Th onClick={() => handleSort('fileName')} cursor="pointer">
                     <HStack spacing={2}>
                       <Text>Name</Text>
-                      {renderSortIcon('name')}
+                      {renderSortIcon('fileName')}
                     </HStack>
                   </Th>
                   <Th onClick={() => handleSort('duration')} cursor="pointer">
@@ -295,11 +329,14 @@ export const FileSelection: React.FC<FileSelectionProps> = ({
                     _hover={{ bg: 'gray.50' }}
                     cursor="pointer"
                   >
-                    <Td>{file.name}</Td>
+                    <Td>{file.fileName}</Td>
                     <Td>{formatDuration(file.duration)}</Td>
                     <Td>{formatFileSize(file.size)}</Td>
-                    <Td>{new Date(file.modifiedAt).toLocaleDateString()}</Td>
-                    <Td>{renderStatusBadge(file.status)}</Td>
+                    <Td>{file.modifiedAt instanceof Date 
+                      ? file.modifiedAt.toLocaleDateString()
+                      : new Date(file.modifiedAt).toLocaleDateString()
+                    }</Td>
+                    <Td>{renderStatusBadge(file.transcriptionStatus)}</Td>
                   </Tr>
                 ))}
               </Tbody>

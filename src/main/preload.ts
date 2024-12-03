@@ -5,9 +5,10 @@ import type {
   Recording, 
   Transcription, 
   TranscriptionProgress,
-  TranscriptionError,
   RecordingStatus
 } from '../shared/types';
+
+type EventCallback<T = unknown> = (event: Electron.IpcRendererEvent, ...args: T[]) => void;
 
 export interface ElectronAPI {
   // Settings methods
@@ -45,8 +46,8 @@ export interface ElectronAPI {
   getTranscriptionProgress: (recordingId: string) => Promise<TranscriptionProgress>;
   
   // Event system
-  on: (channel: string, callback: (...args: any[]) => void) => void;
-  removeListener: (channel: string, callback: (...args: any[]) => void) => void;
+  on: <T>(channel: string, callback: EventCallback<T>) => void;
+  removeListener: <T>(channel: string, callback: EventCallback<T>) => void;
 }
 
 contextBridge.exposeInMainWorld('electron', {
@@ -78,15 +79,16 @@ contextBridge.exposeInMainWorld('electron', {
     ipcRenderer.invoke(IpcChannels.GET_TRANSCRIPTION_PROGRESS, recordingId),
 
   // Event system
-  on: (channel: string, callback: (...args: any[]) => void) => {
-    ipcRenderer.on(channel, (event, ...args) => callback(...args));
+  on: <T>(channel: string, callback: EventCallback<T>) => {
+    const wrappedCallback = (event: Electron.IpcRendererEvent, ...args: T[]) => callback(event, ...args);
+    ipcRenderer.on(channel, wrappedCallback);
+    return wrappedCallback;
   },
-  removeListener: (channel: string, callback: (...args: any[]) => void) => {
-    ipcRenderer.removeListener(channel, callback);
+  removeListener: <T>(channel: string, callback: EventCallback<T>) => {
+    ipcRenderer.removeListener(channel, callback as any);
   }
 });
 
-// Add types for TypeScript
 declare global {
   interface Window {
     electron: ElectronAPI;

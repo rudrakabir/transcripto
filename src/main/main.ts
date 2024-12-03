@@ -6,7 +6,8 @@ import Store from 'electron-store';
 import events from 'events';
 import { Recording, RecordingStatus } from '../shared/types';
 import { webcrypto } from 'crypto';
-import { FileSystemManager, FileSystemManagerImpl } from './file-system';
+import { FileSystemManager } from './file-system';
+import { promises as fs } from 'fs';
 
 const store = new Store();
 const crypto = (globalThis as any).crypto || webcrypto;
@@ -58,20 +59,27 @@ const testDatabase = async () => {
   }
 };
 
-const testFileSystem = () => {
-  return new Promise((resolve) => {
+const testFileSystemBasic = async () => {
+  try {
     const dbPath = path.join(app.getPath('userData'), 'database.sqlite');
-    const fsManager = new FileSystemManagerImpl(dbPath);
+    const testDir = path.join(app.getPath('downloads'), 'TranscriptoTest');
+    
+    // Ensure test directory exists
+    await fs.promises.mkdir(testDir, { recursive: true });
+    
+    const fsManager = new FileSystemManager(dbPath);
+    console.log('FileSystem Manager created');
     
     fsManager.onRecordingAdded((file) => console.log('Recording added:', file));
-    fsManager.onRecordingChanged((file) => console.log('Recording changed:', file));
-    fsManager.onRecordingRemoved((path) => console.log('Recording removed:', path));
-
-    const testDir = path.join(app.getPath('documents'), 'TranscriptoTest');
-    fsManager.watchDirectory(testDir).then(() => resolve(fsManager));
-  });
+    await fsManager.watchDirectory(testDir);
+    console.log('Watching directory:', testDir);
+    
+    return true;
+  } catch (error) {
+    console.error('FileSystem basic test failed:', error);
+    return false;
+  }
 };
-
 
 const createWindow = async () => {
   mainWindow = new BrowserWindow({
@@ -133,18 +141,13 @@ app.whenReady().then(async () => {
     setupIpcHandlers(ipcMain);
     await createWindow();
 
-    // Run database test
     console.log('Running database test...');
-    const testResult = await testDatabase();
-    console.log('Database test completed:', testResult ? 'SUCCESS' : 'FAILED');
+    const dbTestResult = await testDatabase();
+    console.log('Database test completed:', dbTestResult ? 'SUCCESS' : 'FAILED');
 
-    // Run filesystem test
-    try {
-      await testFileSystem();
-      console.log('File system test initialized');
-    } catch (error) {
-      console.error('File system test failed:', error);
-    }
+    console.log('Running basic filesystem test...');
+    const fsTestResult = await testFileSystemBasic();
+    console.log('FileSystem test completed:', fsTestResult ? 'SUCCESS' : 'FAILED');
 
     app.on('activate', async () => {
       if (mainWindow === null) {
@@ -174,3 +177,4 @@ app.on('before-quit', () => {
     process.exit(1);
   }
 });
+
